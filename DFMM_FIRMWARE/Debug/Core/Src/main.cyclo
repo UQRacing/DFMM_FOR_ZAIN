@@ -1,0 +1,13 @@
+../Core/Src/main.c:91:5:main	2
+../Core/Src/main.c:252:6:SystemClock_Config	3
+../Core/Src/main.c:295:6:HAL_TIM_PeriodElapsedCallback	6
+../Core/Src/main.c:314:6:ReadInputs	1
+../Core/Src/main.c:323:6:SystemFailureHandler	10
+../Core/Src/main.c:357:6:AV_State_Outputs	10
+../Core/Src/main.c:378:6:Read_Rotary	5
+../Core/Src/main.c:393:6:ReadForFaults	7
+../Core/Src/main.c:414:6:EBSActivate	3
+../Core/Src/main.c:425:6:EBSReset	2
+../Core/Src/main.c:432:6:EBSCheck	5
+../Core/Src/main.c:441:6:Initial_Checkup	7
+../Core/Src/main.c:485:6:Error_Handler	1
