@@ -68,7 +68,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
 
 void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
 
-void CAN_Set_Filter(int FilterBank, int FIFO_Number, CAN_FilterTypeDef *canhandler);
+void CAN_Set_Filter(uint8_t FilterBank, CAN_FilterTypeDef *canhandler);
 /**
   * @brief  This function is used to create a filter for any CAN ID incoming over the CAN Bus.
   * @param  Filter Bank is an integer between 0 and 27, which corresponds to the different filter banks that are available in the microcontroller.

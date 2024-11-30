@@ -25,27 +25,36 @@
 extern volatile uint8_t	 HeartbeatCheck[3];
 CAN_TxHeaderTypeDef   TxHeader;
 uint8_t               TxData[8];
+uint8_t               DataLogger[8];
 CAN_RxHeaderTypeDef   RxHeader;
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
-CAN_FilterTypeDef canfilter_1;
-const uint32_t	     M150_ID = 0x004;
-const uint32_t	     EPOS4_ID = 0x008;
-const uint32_t	     RES_ID = 0x111;
-const uint32_t	     PC_ID = 0x222;
-extern volatile int EBS_Energy_Check;
-extern volatile int EBS_Pressure_Check;
-extern volatile int Service_Brake_Check;
-extern volatile int Steering_Actuator_Check;
-extern volatile int Mission_Finished;
-extern volatile int EBS_Sound;
-extern volatile int RES;
-extern volatile int length;
-extern volatile int R2D;
-extern volatile int EBS_Brake_Line;
-extern volatile int StrainGauge;
-extern volatile int EBS_Test_Accel_Stop;
-extern volatile int OVERRIDE;
+CAN_FilterTypeDef canfilter;
+/* The following are constant IDs of each control node's messages. Messages from the M150 for example can
+ * be from any id in the range 0x510 - 0x530, giving a range of usable channels for messages TO the DFMM. DFMM has
+ * standard node ID 0x476.
+ */
+const uint32_t	     DFMM_ID = 0x476;
+const uint32_t	     M150_ID = 0x510;
+const uint32_t	     EPOS4_ID = 0x530;
+const uint32_t	     RES_ID = 0x550;
+const uint32_t	     PC_ID = 0x570;
+const uint32_t	     PC_ID_FRAME1 = 0x590; // Data logger frame 1
+const uint32_t	     PC_ID_FRAME2 = 0x591; // Data logger frame 2
+const uint32_t	     PC_ID_FRAME3 = 0x592; // Data logger frame 3
+
+extern volatile uint8_t EBS_Energy_Check;
+extern volatile uint8_t EBS_Pressure_Check;
+extern volatile uint8_t Service_Brake_Check;
+extern volatile uint8_t Steering_Actuator_Check;
+extern volatile uint8_t Mission_Finished;
+extern volatile uint8_t EBS_Sound;
+extern volatile uint8_t RES;
+extern volatile uint8_t length;
+extern volatile uint8_t R2D;
+extern volatile uint8_t EBS_Brake_Line;
+extern volatile uint8_t StrainGauge;
+extern volatile uint8_t EBS_Test_Accel_Stop;
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan1;
@@ -63,7 +72,7 @@ void MX_CAN1_Init(void)
 
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 4;
+  hcan1.Init.Prescaler = 2;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan1.Init.TimeSeg1 = CAN_BS1_12TQ;
@@ -79,7 +88,13 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-
+  if (HAL_CAN_Start(&hcan1) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  TxHeader.IDE = CAN_ID_STD;
+  TxHeader.StdId = DFMM_ID;
+  TxHeader.RTR = CAN_RTR_DATA;
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -112,8 +127,13 @@ void MX_CAN2_Init(void)
   }
   /* USER CODE BEGIN CAN2_Init 2 */
   if (HAL_CAN_Start(&hcan2) != HAL_OK)
+	{
+	  Error_Handler();
+	}
+  CAN_Set_Filter(17, &canfilter); // ALL messages sent to the DFMM must have channel id starting with 5
+  if (HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) // Activates interrupt for received messages.
     {
-      Error_Handler();
+  	  Error_Handler();
     }
   /* USER CODE END CAN2_Init 2 */
 
@@ -148,6 +168,9 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    /* CAN1 interrupt Init */
+    HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
   /* USER CODE BEGIN CAN1_MspInit 1 */
 
   /* USER CODE END CAN1_MspInit 1 */
@@ -176,6 +199,9 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     GPIO_InitStruct.Alternate = GPIO_AF9_CAN2;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+    /* CAN2 interrupt Init */
+    HAL_NVIC_SetPriority(CAN2_RX1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(CAN2_RX1_IRQn);
   /* USER CODE BEGIN CAN2_MspInit 1 */
 
   /* USER CODE END CAN2_MspInit 1 */
@@ -202,6 +228,8 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
     */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11|GPIO_PIN_12);
 
+    /* CAN1 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(CAN1_RX0_IRQn);
   /* USER CODE BEGIN CAN1_MspDeInit 1 */
 
   /* USER CODE END CAN1_MspDeInit 1 */
@@ -224,6 +252,8 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
     */
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_5|GPIO_PIN_6);
 
+    /* CAN2 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(CAN2_RX1_IRQn);
   /* USER CODE BEGIN CAN2_MspDeInit 1 */
 
   /* USER CODE END CAN2_MspDeInit 1 */
@@ -234,12 +264,15 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 
 void CAN_Send_Message(uint8_t Transmission_Data[8])
 {
+	memset(TxData, 0, sizeof(TxData));
+	length = sizeof(Transmission_Data[8]);
+	TxHeader.DLC = length;
 	int i;
-	for(i=0; i<8; i++) {
+	for(i=0; i<(length-1); i++) {
 		*(TxData + i) = *(Transmission_Data + i);
 	}
 
-	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
 	{
 	   Error_Handler();
 	}
@@ -249,27 +282,24 @@ void CAN_Send_Message_String(char Transmission_Data[8])
 {
 	memset(TxData, 0, sizeof(TxData));
 	length = strlen(Transmission_Data);
+	TxHeader.DLC = length;
 	int i;
-	for(i=0; i<length; i++) {
+	for(i=0; i<(length-1); i++) {
 		*(TxData + i) = (unsigned int)((unsigned char)*(Transmission_Data + i));
 	}
 
-	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
 	{
 	   Error_Handler();
 	}
 }
 
-void CAN_Set_Filter(int FilterBank, int FIFO_Number, CAN_FilterTypeDef *canhandler) {
+
+void CAN_Set_Filter(uint8_t FilterBank, CAN_FilterTypeDef *canhandler) {
     canhandler->FilterActivation = CAN_FILTER_ENABLE;
 	canhandler->FilterBank = FilterBank;  // which filter bank to use from the assigned ones
-	if (FIFO_Number == 0) {
-		canhandler->FilterFIFOAssignment = CAN_FILTER_FIFO0;
-	}
-	else {
-		canhandler->FilterFIFOAssignment = CAN_FILTER_FIFO1;
-	}
-	canhandler->FilterIdHigh = 0x320<<5;
+	canhandler->FilterFIFOAssignment = CAN_FILTER_FIFO0;
+	canhandler->FilterIdHigh = 0x500<<5;
 	canhandler->FilterIdLow = 0;
 	canhandler->FilterMaskIdHigh = 0xF00<<5;
 	canhandler->FilterMaskIdLow = 0;
@@ -280,10 +310,6 @@ void CAN_Set_Filter(int FilterBank, int FIFO_Number, CAN_FilterTypeDef *canhandl
 }
 
 void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data) {
-	if ('y' == *(Receive_Data + 6)) {
-		HAL_GPIO_TogglePin(ASSI_BLUE_GPIO_Port, ASSI_BLUE_Pin);
-	}
-
 	if (ReceptionHeader->StdId == M150_ID) {
 		HeartbeatCheck[0] = __HAL_TIM_GET_COUNTER(&htim7);
 		if (0x11 == *(Receive_Data + 7)) {
@@ -329,7 +355,7 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 		}
 	}
 
-	if (ReceptionHeader->StdId == RES_ID) {
+	else if (ReceptionHeader->StdId == RES_ID) {
 			if (0x11 == *(Receive_Data + 7)) {}
 			else if (0x0B == *(Receive_Data + 7)) {
 				RES = 1;
@@ -342,7 +368,7 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 			}
 		}
 
-	if (ReceptionHeader->StdId == PC_ID) {
+	else if (ReceptionHeader->StdId == PC_ID) {
 		HeartbeatCheck[1] = __HAL_TIM_GET_COUNTER(&htim7);
 		if (0x11 == *(Receive_Data + 7)) {}
 		else if (0x01 == *(Receive_Data + 7)) {
@@ -354,15 +380,9 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 		else if (0x03 == *(Receive_Data + 7)) {
 			EBS_Test_Accel_Stop = 1;
 		}
-		else if (0x04 == *(Receive_Data + 7)) {
-			OVERRIDE = 1;
-		}
-		else if (0x05 == *(Receive_Data + 7)) {
-			OVERRIDE = 0;
-		}
 	}
 
-	if (ReceptionHeader->StdId == EPOS4_ID) {
+	else if (ReceptionHeader->StdId == EPOS4_ID) {
 		HeartbeatCheck[2] = __HAL_TIM_GET_COUNTER(&htim7);
 		if (0x11 == *(Receive_Data + 7)) {}
 		else if (0x01 == *(Receive_Data + 7)) {

@@ -43,10 +43,10 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-AV_STATE av_status = OFF; // Tracks current state of AV
+AV_STATE av_status = OFF; // Tracks current state of AV (initial state is off)
 FAILURE_MODE_READING FAILURE_MODE = NONE; // Stores current error of the AV for error message
 AS__INDICATOR_STATES State_Variables; // Stores current state of AV inputs
-AS__INDICATOR_STATES* indicators = &State_Variables;
+AS__INDICATOR_STATES* indicators = &State_Variables; // Pointer to the AV inputs struct
 
 /* USER CODE END PM */
 
@@ -64,24 +64,26 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint16_t timecheck = 0; // Stores time in order to trigger timeout errors
-uint8_t CAN_Bus_Limiter = 0; // Acts as a boolean that prevents a large number of error messages being dumped into the CAN Bus.
-int ASMS_Status = 0; // Stores state of ASMS.
-// Global flags altered by CAN receive interrupts ----------------
-volatile int EBS_Energy_Check = 0;
-volatile int EBS_Pressure_Check = 0;
-volatile int Service_Brake_Check = 0;
-volatile int Steering_Actuator_Check = 0;
-volatile int Mission_Finished = 0;
-volatile int EBS_Sound = 0;
-volatile int RES = 0;
-volatile int length = 0;
-volatile int R2D = 0;
-volatile int EBS_Brake_Line = 0;
-volatile int StrainGauge = 0;
-volatile int EBS_Test_Accel_Stop = 0;
-volatile uint8_t HeartbeatCheck[3] = {0, 0, 0};
-volatile uint8_t OVERRIDE = 0;
-// --------------------------------------------------------------------
+uint8_t CAN_Bus_Limiter = 0; // Acts as a limit that prevents a large number of error messages being dumped into the CAN Bus.
+
+/* The following variables are global flags triggered by various CAN Channels. These will NEED to be changed
+ * depending on the hex address of the channel (refer to the CAN source file)
+ */
+volatile uint8_t EBS_Energy_Check = 0;
+volatile uint8_t EBS_Pressure_Check = 0;
+volatile uint8_t Service_Brake_Check = 0;
+volatile uint8_t Steering_Actuator_Check = 0;
+volatile uint8_t Mission_Finished = 0;
+volatile uint8_t EBS_Sound = 0;
+volatile uint8_t RES = 0;
+volatile uint8_t length = 0;
+volatile uint8_t R2D = 0;
+volatile uint8_t EBS_Brake_Line = 0;
+volatile uint8_t StrainGauge = 0;
+volatile uint8_t EBS_Test_Accel_Stop = 0;
+
+volatile uint8_t HeartbeatCheck[3] = {0, 0, 0}; // Stores the time since last heartbeat/message received from node - PLEASE CHANGE TIMEOUT PERIODS (refer to timer interrupts) AND NODE IDS (refer to CAN source file) IF ERRORS ARE THROWN
+
 /* USER CODE END 0 */
 
 /**
@@ -92,8 +94,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+
 // LV Systems turn on -------------------------------------
-  Read_Rotary(&(State_Variables.R_S));
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -110,6 +113,8 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+  // Peripheral initialisation starts -------------------------------------------------------
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -123,18 +128,13 @@ int main(void)
   MX_CAN2_Init();
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
-  if (HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-  HAL_TIM_Base_Start_IT(&htim6);
-  HAL_TIM_Base_Start_IT(&htim7);
-  while (1) {
-	  CAN_Send_Message_String("HELLOSY");
-	  HAL_Delay(200);
-  }
-  ASSI_Off();
-  av_status = OFF; // Initial state is Off.
+  HAL_TIM_Base_Start_IT(&htim6); // Initialise timer
+  HAL_TIM_Base_Start_IT(&htim7); // Initialise timer
+
+  // Peripheral initialisation complete -------------------------------------------------------
+
+  Read_Rotary(&(State_Variables.R_S)); // Reads the current mission of the AV
+  ASSI_Off(); // Ensures ASSI output is off
 
   // Read all inputs before
   /* USER CODE END 2 */
@@ -144,18 +144,17 @@ int main(void)
   while (1)
   {
 	/* This is an implementation of a FSM in C. State outputs are executed at the start of every loop, along with the state attribute checks.
-	 * A switch block is used for the state transitions for ever possible state. There are while loops used in transition statements when the new state attributes rely on external control system changes.
+	 * A switch block is used for the state transitions for ever possible state.
 	 */
-	ReadInputs(indicators);
-	ReadForFaults(&FAILURE_MODE, indicators);
-	AV_State_Outputs(indicators, av_status, FAILURE_MODE);
+	ReadInputs(indicators); // Updates all AV inputs
+	ReadForFaults(&FAILURE_MODE, indicators); // Checks all fault readings from AV
+	AV_State_Outputs(indicators, av_status, FAILURE_MODE); // Implements ASSI and EBS changes depending on current State
 
 	switch(av_status) {
 			case OFF:
-				if(indicators->R_S != ROT_4 && indicators->TS == 1
-						&& ASMS_Status == 1) {
+				if(indicators->R_S != INSPECTION && indicators->TS == 1
+						&& indicators->ASMS_Status == 1) {
 					CAN_Send_Message_String("READY \n");
-				//	while (indicators->SB != 1 && indicators->SA != 1) {}
 					Initial_Checkup();
 					av_status = READY;
 					timecheck = __HAL_TIM_GET_COUNTER(&htim7);
@@ -168,22 +167,20 @@ int main(void)
 					CAN_Send_Message_String("TS OFF\n");
 					av_status = EMERGENCY;
 				}
-				else if(ASMS_Status == 0 && indicators->TS == 0 && indicators->EBS == 0) {
+				else if(indicators->ASMS_Status == 0 && indicators->TS == 0 && indicators->EBS == 0) {
 					CAN_Send_Message_String("OFF   \n");
-					while(indicators->SB != 0 && indicators->SA != 0) {}
 					av_status = OFF;
 				}
-				else if((__HAL_TIM_GET_COUNTER(&htim7) - timecheck) > 500 && indicators->R_S != ROT_1 && R2D == 1) {
-					if (indicators->R_S == ROT_2) {
+				else if((__HAL_TIM_GET_COUNTER(&htim7) - timecheck) > 500 && indicators->R_S != MANUAL && R2D == 1) {
+					if (indicators->R_S == TRACK) {
 						CAN_Send_Message_String("EBSTEST");
 					}
-					else if (indicators->R_S == ROT_3) {
+					else if (indicators->R_S == EBS_TEST) {
 						CAN_Send_Message_String("INSPECT");
 					}
-					else if (indicators->R_S == ROT_4) {
+					else if (indicators->R_S == INSPECTION) {
 						CAN_Send_Message_String("DRIVING");
 					}
-			//		while(indicators->EBS == ACTIVATED && indicators->SB != 1 && indicators->SA != 1)
 					av_status = DRIVING;
 				}
 				break;
@@ -195,7 +192,7 @@ int main(void)
 					CAN_Send_Message_String("DS OFF\n");
 					av_status = EMERGENCY;
 				}
-				else if(indicators->R_S == ROT_2) {
+				else if(indicators->R_S == TRACK) {
 					if(EBS_Test_Accel_Stop == 1) {
 						av_status = EMERGENCY;
 					}
@@ -205,20 +202,12 @@ int main(void)
 					CAN_Send_Message_String("FINISH\n");
 					CAN_Send_Message_String("TS OFF\n");
 					CAN_Send_Message_String("DS OFF\n");
-				//	while(indicators->SA != 0 && indicators->TS != 0 && indicators->R_S != 2) {}
 					av_status = FINISHED;
 				}
 				break;
 
-			case MANUAL:
-				if(indicators->TS == 0) {
-					av_status = OFF;
-					CAN_Send_Message_String("OFF   \n");
-				}
-				break;
-
 			case EMERGENCY:
-				if(EBS_Sound == 0 && ASMS_Status == 0 && indicators->SB == 0 && indicators->TS == 0 && indicators->R_S == ROT_2) {
+				if(EBS_Sound == 0 && indicators->ASMS_Status == 0 && indicators->SB == 0 && indicators->TS == 0 && indicators->R_S == TRACK) {
 					av_status = OFF;
 					RES = 0;
 					CAN_Send_Message_String("OFF   \n");
@@ -231,9 +220,8 @@ int main(void)
 					CAN_Send_Message_String("EMGNCY\n");
 					av_status = EMERGENCY;
 				}
-				else if(ASMS_Status == 0 && indicators->SB == 0) {
+				else if(indicators->ASMS_Status == 0 && indicators->SB == 0) {
 					CAN_Send_Message_String("OFF   \n");
-					while(indicators->TS != 0 && indicators->R_S != ROT_2) {}
 					av_status = OFF;
 				}
 				break;
@@ -295,11 +283,11 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   // Check which version of the timer triggered this callback and toggle Watchdog
-  if (htim == &htim7)
+  if (htim == &htim7) // Heartbeat check may be faulty if nodes cannot meet timeout of 2s but still work. Scrap Heartbeat check in this case. Also refer to CAN source file to change Node ids (channel Ids) for respective nodes.
   {
 	  int i;
-	  	for (i = 0; i < 3; i++) {
-	  		if ((__HAL_TIM_GET_COUNTER(&htim6) - HeartbeatCheck[i]) > 200 || OVERRIDE == 1) {
+	  	for (i = 1; i < 3; i++) {
+	  		if ((__HAL_TIM_GET_COUNTER(&htim6) - HeartbeatCheck[i]) > 2000) {
 	  			FAILURE_MODE = HEARTBEAT_FAULT;
 	  			}
 	  	}
@@ -307,19 +295,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
   if (htim == &htim7)
     {
-  	  HAL_GPIO_TogglePin(WDI_GPIO_Port, WDI_Pin);
+  	  HAL_GPIO_TogglePin(WDI_GPIO_Port, WDI_Pin); // Toggle watchdog control pin
     }
 }
 
 void ReadInputs(AS__INDICATOR_STATES *indicators) {
 	Read_Rotary(&(indicators->R_S));
 	indicators->TS = HAL_GPIO_ReadPin(_3V3_TS_SWITCH_GPIO_Port, _3V3_TS_SWITCH_Pin);
-	indicators->SB = Service_Brake_Check;
-	indicators->SA = Steering_Actuator_Check;
+	indicators->SB = Service_Brake_Check; // Redundant
+	indicators->SA = Steering_Actuator_Check; // Redundant
+	indicators->ASMS_Status = HAL_GPIO_ReadPin(ASMS_SIG_GPIO_Port, ASMS_SIG_Pin);
 	EBSCheck(indicators);
-	ASMS_Status = HAL_GPIO_ReadPin(ASMS_SIG_GPIO_Port, ASMS_SIG_Pin);
 }
 
+/**
+  * @brief  This function is used to handle the failure-specific information transmitted over CAN.
+  * 		Depending on the Failure Mode, the response over CAN will be different.
+  * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
+  * @retval void
+  */
 void SystemFailureHandler(FAILURE_MODE_READING fm) {
 	switch (fm) {
 		case NONE:
@@ -354,6 +348,13 @@ void SystemFailureHandler(FAILURE_MODE_READING fm) {
 	Error_Handler();
 }
 
+/**
+  * @brief  This function is used to cycle through the ASSI and EBS outputs of the current AV State.
+  * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
+  * 		indicators is a pointer to the struct containing all state information.
+  * 		status is an enum that corresponds to the current state of the AV, according to the FSM in the .README documentation.
+  * @retval void
+  */
 void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE_MODE_READING FM) {
 	switch(status) {
 		case (READY):
@@ -366,30 +367,38 @@ void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE
 				ASSI_Finished();
 		case (OFF):
 				ASSI_Off();
-		case (MANUAL):
-				ASSI_Off();
 	}
 
-	if(ASMS_Status == 0 || (av_status != OFF && av_status != MANUAL)) {
-		av_status = OFF;
-	}
+
 }
 
+/**
+  * @brief  This function is used to check what state the Rotary Switch is currently in.
+  * @param  RS is a pointer to the Rotary Switch enum that corresponds to all the different states.
+  * @retval void
+  */
 void Read_Rotary(ROT_SWITCH* RS) {
-	if(GPIO_PIN_SET == HAL_GPIO_ReadPin(ROT_1_SIG_GPIO_Port, ROT_1_SIG_Pin)) {
-		*RS = ROT_1;
+	// Rotary switch is active high
+	if(GPIO_PIN_RESET == HAL_GPIO_ReadPin(ROT_1_SIG_GPIO_Port, ROT_1_SIG_Pin)) {
+		*RS = MANUAL;
 	}
-	else if (GPIO_PIN_SET == HAL_GPIO_ReadPin(ROT_2_SIG_GPIO_Port, ROT_2_SIG_Pin)) {
-		*RS = ROT_2;
+	else if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(ROT_2_SIG_GPIO_Port, ROT_2_SIG_Pin)) {
+		*RS = TRACK;
 	}
-	else if (GPIO_PIN_SET == HAL_GPIO_ReadPin(ROT_3_SIG_GPIO_Port, ROT_3_SIG_Pin)) {
-		*RS = ROT_3;
+	else if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(ROT_3_SIG_GPIO_Port, ROT_3_SIG_Pin)) {
+		*RS = EBS_TEST;
 	}
-	else if (GPIO_PIN_SET == HAL_GPIO_ReadPin(ROT_4_SIG_GPIO_Port, ROT_4_SIG_Pin)) {
-		*RS = ROT_4;
+	else if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(ROT_4_SIG_GPIO_Port, ROT_4_SIG_Pin)) {
+		*RS = INSPECTION;
 	}
 }
 
+/**
+  * @brief  This function reads the status of IMD, BSPD and BMS failure pins and changes the corresponding flags.
+  * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
+  *			indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
 void ReadForFaults(FAILURE_MODE_READING *Fm, AS__INDICATOR_STATES *indicators) {
 	if(HAL_GPIO_ReadPin(BMS_FAULT_GPIO_Port, BMS_FAULT_Pin) == 1) {
 		*Fm = BMS_FAULT;
@@ -411,6 +420,17 @@ void ReadForFaults(FAILURE_MODE_READING *Fm, AS__INDICATOR_STATES *indicators) {
 	}
 }
 
+/**
+  * @brief  This function is used to activate the EBS by setting the EBS actuator pin high. Also activates the redundant system if EBS not available.
+  * @param  indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
+
+/**
+  * @brief  This function is used to activate the EBS by setting the EBS actuator pin high. Also activates the redundant system if EBS not available.
+  * @param  indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
 void EBSActivate(AS__INDICATOR_STATES *indicators) {
 	EBSCheck(indicators);
 	if (indicators->EBS == ACTIVATED) {
@@ -422,6 +442,11 @@ void EBSActivate(AS__INDICATOR_STATES *indicators) {
 	}
 }
 
+/**
+  * @brief  This function is used to deactivate the EBS by enabling the SDC, which will happen if failures have been resolved.
+  * @param  indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
 void EBSReset(AS__INDICATOR_STATES *indicators) {
 	EBSCheck(indicators);
 	if (indicators->EBS == ACTIVATED) {
@@ -429,15 +454,25 @@ void EBSReset(AS__INDICATOR_STATES *indicators) {
 	}
 }
 
+/**
+  * @brief  Performs initial checkup before going into Ready State from Idle.
+  * @param  void
+  * @retval void
+  */
 void EBSCheck(AS__INDICATOR_STATES *indicators) {
-	if (EBS_Energy_Check == 1 && EBS_Brake_Line == 1) {
+	if (EBS_Pressure_Check == 1 && EBS_Brake_Line == 1) {
 		indicators->EBS = ACTIVATED;
 	}
-	else if (EBS_Energy_Check == 0 || EBS_Pressure_Check == 0) {
+	else if (EBS_Brake_Line == 0 || EBS_Pressure_Check == 0) {
 		indicators->EBS = DEACTIVATED;
 	}
 }
 
+/**
+  * @brief  This function is used to deactivate the EBS by enabling the SDC, which will happen if failures have been resolved.
+  * @param  indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
 void Initial_Checkup(void) {
 	  timecheck = __HAL_TIM_GET_COUNTER(&htim7); // You will see this often. This is me setting the current count of the timer to the timecheck variable for future comparison.
 	  while (HAL_GPIO_ReadPin(SDC_CHECK_GPIO_Port, SDC_CHECK_Pin) == GPIO_PIN_RESET) {

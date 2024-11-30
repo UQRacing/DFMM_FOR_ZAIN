@@ -49,10 +49,10 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 typedef enum Rotary_Switch {
-	  ROT_1, // Manual Mission
-	  ROT_2, // Autonomous Mission
-	  ROT_3, // EBS Mission
-	  ROT_4  // Inspection Mission
+	  MANUAL, // Manual Mission
+	  TRACK, // Track Drive Mission
+	  EBS_TEST, // EBS Mission
+	  INSPECTION  // Inspection Mission
 } ROT_SWITCH; // Enum for current state of Rotary Switch
 typedef enum EBS_STATE {
 	  DEACTIVATED,
@@ -64,6 +64,7 @@ typedef struct {
 	int SA; // Steering Actuator
 	int SB; // Service Brake
 	EBS_STATE EBS; // Emergency Braking System
+	uint8_t ASMS_Status; // Stores the state of the ASMS
 } AS__INDICATOR_STATES; // Struct for all current AV state attributes.
 typedef enum SYSTEM_FAILURE {
 	  SDC_FAILURE,
@@ -81,22 +82,21 @@ typedef enum AV_STATUS {
 	DRIVING,
 	OFF,
 	EMERGENCY,
-	FINISHED,
-	MANUAL} AV_STATE; // Enum for current state of the AV, referenced from FSM in .README;
+	FINISHED
+	} AV_STATE; // Enum for current state of the AV, referenced from FSM in .README;
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void SystemFailureHandler(FAILURE_MODE_READING fm);
 /**
   * @brief  This function is used to handle the failure-specific information transmitted over CAN.
   * 		Depending on the Failure Mode, the response over CAN will be different.
   * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
   * @retval void
   */
-void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE_MODE_READING FM);
+void SystemFailureHandler(FAILURE_MODE_READING fm);
 /**
   * @brief  This function is used to cycle through the ASSI and EBS outputs of the current AV State.
   * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
@@ -104,49 +104,51 @@ void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE
   * 		status is an enum that corresponds to the current state of the AV, according to the FSM in the .README documentation.
   * @retval void
   */
-void Read_Rotary(ROT_SWITCH *RS);
+void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE_MODE_READING FM);
 /**
   * @brief  This function is used to check what state the Rotary Switch is currently in.
   * @param  RS is a pointer to the Rotary Switch enum that corresponds to all the different states.
   * @retval void
   */
-void ReadForFaults(FAILURE_MODE_READING *Fm, AS__INDICATOR_STATES *indicators);
+void Read_Rotary(ROT_SWITCH *RS);
 /**
   * @brief  This function reads the status of IMD, BSPD and BMS failure pins and changes the corresponding flags.
   * @param  fm is an enum that corresponds to the different types of failures that can occur in the AV.
   *			indicators is a pointer to the struct containing all state information.
   * @retval void
   */
-void EBSActivate(AS__INDICATOR_STATES *indicators);
+void ReadForFaults(FAILURE_MODE_READING *Fm, AS__INDICATOR_STATES *indicators);
 /**
   * @brief  This function is used to activate the EBS by setting the EBS actuator pin high. Also activates the redundant system if EBS not available.
   * @param  indicators is a pointer to the struct containing all state information.
   * @retval void
   */
-void EBSCheck(AS__INDICATOR_STATES *indicators);
+void EBSActivate(AS__INDICATOR_STATES *indicators);
 /**
   * @brief  This function is used to change the EBS variable in the indicator struct to the current state of the EBS: Activated for EBS activation, Deactivated for no EBS activation.
   * @param  indicators is a pointer to the struct containing all state information.
   * @retval void
   */
-void Initial_Checkup(void);
+void EBSCheck(AS__INDICATOR_STATES *indicators);
 /**
   * @brief  Performs initial checkup before going into Ready State from Idle.
   * @param  void
   * @retval void
   */
-void EBSReset(AS__INDICATOR_STATES *indicators);
+void Initial_Checkup(void);
 /**
   * @brief  This function is used to deactivate the EBS by enabling the SDC, which will happen if failures have been resolved.
   * @param  indicators is a pointer to the struct containing all state information.
   * @retval void
   */
-void ReadInputs(AS__INDICATOR_STATES *indicators);
+void EBSReset(AS__INDICATOR_STATES *indicators);
 /**
   * @brief  This function is used to change all variable in the indicator struct to their current state.
   * @param  indicators is a pointer to the struct containing all state information.
   * @retval void
   */
+void ReadInputs(AS__INDICATOR_STATES *indicators);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
