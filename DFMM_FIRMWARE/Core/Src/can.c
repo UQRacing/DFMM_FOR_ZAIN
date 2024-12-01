@@ -265,7 +265,7 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 void CAN_Send_Message(uint8_t Transmission_Data[8])
 {
 	memset(TxData, 0, sizeof(TxData));
-	length = sizeof(Transmission_Data[8]);
+	length = (sizeof(Transmission_Data))/8;
 	TxHeader.DLC = length;
 	int i;
 	for(i=0; i<(length-1); i++) {
