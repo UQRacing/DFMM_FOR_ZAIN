@@ -286,7 +286,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim == &htim7) // Heartbeat check may be faulty if nodes cannot meet timeout of 2s but still work. Scrap Heartbeat check in this case. Also refer to CAN source file to change Node ids (channel Ids) for respective nodes.
   {
 	  int i;
-	  	for (i = 1; i < 3; i++) {
+	  	for (i = 0; i < 1; i++) {
 	  		if ((__HAL_TIM_GET_COUNTER(&htim6) - HeartbeatCheck[i]) > 2000) {
 	  			FAILURE_MODE = HEARTBEAT_FAULT;
 	  			}
@@ -368,8 +368,6 @@ void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE
 		case (OFF):
 				ASSI_Off();
 	}
-
-
 }
 
 /**

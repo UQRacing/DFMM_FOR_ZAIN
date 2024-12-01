@@ -52,13 +52,13 @@ void MX_CAN1_Init(void);
 void MX_CAN2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-void CAN_Send_Message(uint8_t Transmission_Data[8]);
+void CAN_Send_Message(uint8_t* Transmission_Data);
 /**
   * @brief  This function is used to transmit an array of 8 bytes over the CAN bus.
   * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
   * @retval void
   */
-void CAN_Send_Message_String(char Transmission_Data[8]);
+void CAN_Send_Message_String(char* Transmission_Data);
 /**
   * @brief  This function is used to transmit an array of an 8 byte string over the CAN bus.
   * @param  Transmission_Data is a string with maximum 8 bytes, which is transmitted over the CAN Bus.

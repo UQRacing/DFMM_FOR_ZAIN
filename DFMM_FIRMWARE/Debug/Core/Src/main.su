@@ -4,10 +4,10 @@
 ../Core/Src/main.c:302:6:ReadInputs	16	static
 ../Core/Src/main.c:317:6:SystemFailureHandler	16	static
 ../Core/Src/main.c:358:6:AV_State_Outputs	16	static
-../Core/Src/main.c:380:6:Read_Rotary	16	static
-../Core/Src/main.c:402:6:ReadForFaults	16	static
-../Core/Src/main.c:434:6:EBSActivate	16	static
-../Core/Src/main.c:450:6:EBSReset	16	static
-../Core/Src/main.c:462:6:EBSCheck	16	static
-../Core/Src/main.c:476:6:Initial_Checkup	8	static
-../Core/Src/main.c:520:6:Error_Handler	8	static,ignoring_inline_asm
+../Core/Src/main.c:378:6:Read_Rotary	16	static
+../Core/Src/main.c:400:6:ReadForFaults	16	static
+../Core/Src/main.c:432:6:EBSActivate	16	static
+../Core/Src/main.c:448:6:EBSReset	16	static
+../Core/Src/main.c:460:6:EBSCheck	16	static
+../Core/Src/main.c:474:6:Initial_Checkup	8	static
+../Core/Src/main.c:518:6:Error_Handler	8	static,ignoring_inline_asm
