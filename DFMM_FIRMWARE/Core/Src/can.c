@@ -23,10 +23,11 @@
 
 /* USER CODE BEGIN 0 */
 extern volatile uint8_t	 HeartbeatCheck[2];
+extern uint8_t av_status_hex;
 volatile uint8_t length; // Length of message being sent
 CAN_TxHeaderTypeDef   TxHeader;
 uint8_t               TxData[8];
-uint8_t               DataLogger[3];
+uint8_t               DataLogger[4];
 CAN_RxHeaderTypeDef   RxHeader;
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
@@ -89,9 +90,9 @@ void MX_CAN1_Init(void)
   }
   /* USER CODE BEGIN CAN1_Init 2 */
   if (HAL_CAN_Start(&hcan1) != HAL_OK)
-    {
-      Error_Handler();
-    }
+  {
+	Error_Handler();
+  }
   TxHeader.IDE = CAN_ID_STD;
   TxHeader.StdId = DFMM_ID;
   TxHeader.RTR = CAN_RTR_DATA;
@@ -109,7 +110,6 @@ void MX_CAN2_Init(void)
   /* USER CODE BEGIN CAN2_Init 1 */
 
   /* USER CODE END CAN2_Init 1 */
-
   hcan2.Instance = CAN2;
   hcan2.Init.Prescaler = 4;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
@@ -122,9 +122,6 @@ void MX_CAN2_Init(void)
   hcan2.Init.AutoRetransmission = DISABLE;
   hcan2.Init.ReceiveFifoLocked = DISABLE;
   hcan2.Init.TransmitFifoPriority = DISABLE;
-  TxHeader.IDE = CAN_ID_STD;
-  TxHeader.StdId = DFMM_ID;
-  TxHeader.RTR = CAN_RTR_DATA;
   if (HAL_CAN_Init(&hcan2) != HAL_OK)
   {
     Error_Handler();
@@ -135,7 +132,7 @@ void MX_CAN2_Init(void)
 	Error_Handler();
   }
   CAN_Set_Filter(17, &canfilter); // ALL messages sent to the DFMM must have channel id starting with 5
-  if (HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) // Activates interrupt for received messages.
+  if (HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK) // Activates interrupt for received messages.
   {
 	Error_Handler();
   }
@@ -268,7 +265,7 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 
 /**
   * @brief  This function is used to transmit an array of 8 bytes over the CAN bus.
-  * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
+  * @param  Transmission_Data is a pointer to an array of 8 bytes, with each byte being one 2 digit hex code.
   * @retval void
   */
 void CAN_Send_Message(uint8_t* Transmission_Data)
@@ -310,7 +307,7 @@ void CAN_Send_Message_String(char* Transmission_Data)
 
 /**
   * @brief  This function is used to transmit an array of 8 bytes over the CAN bus with a custom ID.
-  * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
+  * @param  Transmission_Data is a pointer to an array of 8 bytes, with each byte being one 2 digit hex code.
   * 		ID is an unsigned 32 bit integer meant to be passed as a uninitialised hex code ie: 0x443, 0x221 etc.
   * @retval void
   */
@@ -405,6 +402,7 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 	}
 	else if (ReceptionHeader->StdId == PC_ID_FRAME2) {
 				DataLogger[2] = *(Receive_Data); // Third data logger byte stored in array DataLogger
+				DataLogger[3] = av_status_hex;
 				CAN_Send_Message(DataLogger); // Message is sent
 	}
 	else if (ReceptionHeader->StdId == M150_ID) {
@@ -472,7 +470,7 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-  if (HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+  if (HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, RxData) != HAL_OK)
   {
 		Error_Handler();
   }

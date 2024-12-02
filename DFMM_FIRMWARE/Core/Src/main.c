@@ -47,6 +47,7 @@ AV_STATE av_status = OFF; // Tracks current state of AV (initial state is off)
 FAILURE_MODE_READING FAILURE_MODE = NONE; // Stores current error of the AV for error message
 AS__INDICATOR_STATES State_Variables; // Stores current state of AV inputs
 AS__INDICATOR_STATES* indicators = &State_Variables; // Pointer to the AV inputs struct
+uint8_t M150_State_Trigger[8];
 
 /* USER CODE END PM */
 
@@ -146,8 +147,19 @@ int main(void)
   Read_Rotary(&(State_Variables.R_S)); // Reads the current mission of the AV
   ASSI_Off(); // Ensures ASSI output is off
 
+  /* Following is a testing block. Put a breakpoint at the first line when in debug mode, and when you press the resume
+   * button, the code will run through this block. For CAN, probe the lines with the Saleas first. See if CAN frames
+   * are being sent. For input pins, the state of them is updated in the indicators struct. If you hover over it
+   * it will give a list of inputs (TS, SDC, ASMS). It will be 0 if low, 1 if high. The FAILURE_MODE struct will do
+   * the same thing but for failure mode pins. Rotary Switch status is stored in indicators struct as well BUT
+   * it is active high, so whichever mode is being used will need to be connected to ground.
+   */
   while(1) {
-	  C
+	  CAN_Send_Message_String("OOGABOOG");
+	  CAN_Send_Datalogger();
+	  ReadInputs(indicators);
+	  ReadForFaults(&FAILURE_MODE, indicators);
+	  HAL_Delay(200);
   }
 
   // Read all inputs before
@@ -177,25 +189,22 @@ int main(void)
 
 			case READY:
 				if(FAILURE_MODE != NONE || RES == 1) {
-					CAN_Send_Message_String("EMGNCY\n");
-					CAN_Send_Message_String("TS OFF\n");
 					av_status_hex = 0x04;
 					av_status = EMERGENCY;
 				}
 				else if(indicators->ASMS_Status == 0 && indicators->TS == 0 && indicators->EBS == 0) {
-					CAN_Send_Message_String("OFF   \n");
 					av_status_hex = 0;
 					av_status = OFF;
 				}
 				else if((__HAL_TIM_GET_COUNTER(&htim7) - timecheck) > 500 && indicators->R_S != MANUAL && R2D == 1) {
 					if (indicators->R_S == TRACK) {
-						CAN_Send_Message_String("DRIVING");
+						CAN_Send_Message_String("DRIVING");  // Change this to whatever CAN message needs to be broadcast in Driving state
 					}
 					else if (indicators->R_S == EBS_TEST) {
-						CAN_Send_Message_String("EBSTEST");
+						CAN_Send_Message_String("EBSTEST");  // Change this to whatever CAN message needs to be broadcast in EBS Test state
 					}
 					else if (indicators->R_S == INSPECTION) {
-						CAN_Send_Message_String("INSPECT");
+						CAN_Send_Message_String("INSPECT");  // Change this to whatever CAN message needs to be broadcast in Inspect state
 					}
 					av_status_hex = 0x02;
 					av_status = DRIVING;
@@ -224,7 +233,6 @@ int main(void)
 				if(EBS_Sound == 0 && indicators->ASMS_Status == 0 && indicators->SB == 0 && indicators->TS == 0 && indicators->R_S == TRACK) {
 					av_status = OFF;
 					RES = 0;
-					CAN_Send_Message_String("OFF   \n");
 					av_status_hex = 0;
 					FAILURE_MODE = NONE;
 				}
@@ -232,12 +240,10 @@ int main(void)
 
 			case FINISHED:
 				if(RES == 1) {
-					CAN_Send_Message_String("EMGNCY\n");
 					av_status_hex = 0x04;
 					av_status = EMERGENCY;
 				}
 				else if(indicators->ASMS_Status == 0 && indicators->SB == 0) {
-					CAN_Send_Message_String("OFF   \n");
 					av_status_hex = 0;
 					av_status = OFF;
 				}
@@ -381,19 +387,29 @@ void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE
 	switch(status) {
 		case (READY):
 				ASSI_Ready();
-				CAN_Send_Message_SpecificID(0xFF00000000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
+				memset(M150_State_Trigger, 0, sizeof(M150_State_Trigger)); // Clear M150 Trigger array
+				M150_State_Trigger[0] = 0xFF;
+				CAN_Send_Message_SpecificID(M150_State_Trigger, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (DRIVING):
 				ASSI_Driving();
-				CAN_Send_Message_SpecificID(0x00FF000000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
+				memset(M150_State_Trigger, 0, sizeof(M150_State_Trigger)); // Clear M150 Trigger array
+				M150_State_Trigger[1] = 0xFF;
+				CAN_Send_Message_SpecificID(M150_State_Trigger, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (EMERGENCY):
+				memset(M150_State_Trigger, 0, sizeof(M150_State_Trigger)); // Clear M150 Trigger array
+				M150_State_Trigger[2] = 0xFF;
 				SystemFailureHandler(FM);
-				CAN_Send_Message_SpecificID(0x0000FF0000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
+				CAN_Send_Message_SpecificID(M150_State_Trigger, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (FINISHED):
 				ASSI_Finished();
-				CAN_Send_Message_SpecificID(0x000000FF00000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
+				memset(M150_State_Trigger, 0, sizeof(M150_State_Trigger)); // Clear M150 Trigger array
+				M150_State_Trigger[3] = 0xFF;
+				CAN_Send_Message_SpecificID(M150_State_Trigger, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (OFF):
 				ASSI_Off();
-				CAN_Send_Message_SpecificID(0x00000000FF000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
+				memset(M150_State_Trigger, 0, sizeof(M150_State_Trigger)); // Clear M150 Trigger array
+				M150_State_Trigger[4] = 0xFF;
+				CAN_Send_Message_SpecificID(M150_State_Trigger, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 	}
 }
 
@@ -450,12 +466,6 @@ void ReadForFaults(FAILURE_MODE_READING *Fm, AS__INDICATOR_STATES *indicators) {
   * @param  indicators is a pointer to the struct containing all state information.
   * @retval void
   */
-
-/**
-  * @brief  This function is used to activate the EBS by setting the EBS actuator pin high. Also activates the redundant system if EBS not available.
-  * @param  indicators is a pointer to the struct containing all state information.
-  * @retval void
-  */
 void EBSActivate(AS__INDICATOR_STATES *indicators) {
 	EBSCheck(indicators);
 	if (indicators->EBS == ACTIVATED) {
@@ -485,10 +495,10 @@ void EBSReset(AS__INDICATOR_STATES *indicators) {
   * @retval void
   */
 void EBSCheck(AS__INDICATOR_STATES *indicators) {
-	if (EBS_Pressure_Check == 1 && EBS_Brake_Line == 1) {
+	if (EBS_Brake_Line == 1) {
 		indicators->EBS = ACTIVATED;
 	}
-	else if (EBS_Brake_Line == 0 || EBS_Pressure_Check == 0) {
+	else if (EBS_Brake_Line == 0) {
 		indicators->EBS = DEACTIVATED;
 	}
 }
