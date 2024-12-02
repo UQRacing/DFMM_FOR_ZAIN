@@ -60,8 +60,8 @@ all: main-build
 main-build: DFMM_FIRMWARE.elf secondary-outputs
 
 # Tool invocations
-DFMM_FIRMWARE.elf DFMM_FIRMWARE.map: $(OBJS) $(USER_OBJS) C:\Users\anhad\OneDrive\Documents\UQ\ Formula\ SAE\DFMM_FINAL\DFMM_FOR_ZAIN\DFMM_FIRMWARE\STM32F415RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "DFMM_FIRMWARE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\anhad\OneDrive\Documents\UQ Formula SAE\DFMM_FINAL\DFMM_FOR_ZAIN\DFMM_FIRMWARE\STM32F415RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DFMM_FIRMWARE.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+DFMM_FIRMWARE.elf DFMM_FIRMWARE.map: $(OBJS) $(USER_OBJS) C:\Users\anhad\git\DFMM_FOR_ZAIN\DFMM_FIRMWARE\STM32F415RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "DFMM_FIRMWARE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\anhad\git\DFMM_FOR_ZAIN\DFMM_FIRMWARE\STM32F415RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DFMM_FIRMWARE.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

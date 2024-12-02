@@ -63,27 +63,37 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t av_status_hex = 0; // Stores av status as a hex code: 0 for off, 1 for ready, 2 for driving, 3 for finished and 4 for emergency
 uint16_t timecheck = 0; // Stores time in order to trigger timeout errors
 uint8_t CAN_Bus_Limiter = 0; // Acts as a limit that prevents a large number of error messages being dumped into the CAN Bus.
 
 /* The following variables are global flags triggered by various CAN Channels. These will NEED to be changed
  * depending on the hex address of the channel (refer to the CAN source file)
  */
+
+// Cannister Pressure Check: 1 for ok, 0 for not
 volatile uint8_t EBS_Energy_Check = 0;
-volatile uint8_t EBS_Pressure_Check = 0;
-volatile uint8_t Service_Brake_Check = 0;
-volatile uint8_t Steering_Actuator_Check = 0;
-volatile uint8_t Mission_Finished = 0;
-volatile uint8_t EBS_Sound = 0;
-volatile uint8_t RES = 0;
-volatile uint8_t length = 0;
-volatile uint8_t R2D = 0;
+// Brake Line Pressure Check: 1 for ok, 0 for not
 volatile uint8_t EBS_Brake_Line = 0;
+// Redundant
+volatile uint8_t Service_Brake_Check = 0;
+// Redundant
+volatile uint8_t Steering_Actuator_Check = 0;
+// Flag for mission finish from PC: 1 if finished, 0 if not
+volatile uint8_t Mission_Finished = 0;
+// Flag for EBS buzzer or Driving buzzer playing: 0 for not playing, 1 for EBS buzzer playing, 2 for Driving buzzer playing
+volatile uint8_t EBS_Sound = 0;
+// Flag for RES activated: 0 for not activated, 1 for activated
+volatile uint8_t RES = 0;
+// Flag for R2D switch on RES being switched: 0 if not, 1 for activated
+volatile uint8_t R2D = 0;
+// Flag for strain gauge off M150 showing broken spring: 0 if not, 1 for broken
 volatile uint8_t StrainGauge = 0;
+// Redundant
 volatile uint8_t EBS_Test_Accel_Stop = 0;
-
-volatile uint8_t HeartbeatCheck[3] = {0, 0, 0}; // Stores the time since last heartbeat/message received from node - PLEASE CHANGE TIMEOUT PERIODS (refer to timer interrupts) AND NODE IDS (refer to CAN source file) IF ERRORS ARE THROWN
-
+// Stores the time since last heartbeat/message received from node
+// PLEASE CHANGE TIMEOUT PERIODS (refer to timer interrupts) AND NODE IDS (refer to CAN source file) IF ERRORS ARE THROWN
+volatile uint8_t HeartbeatCheck[3] = {0, 0, 0};
 /* USER CODE END 0 */
 
 /**
@@ -136,6 +146,10 @@ int main(void)
   Read_Rotary(&(State_Variables.R_S)); // Reads the current mission of the AV
   ASSI_Off(); // Ensures ASSI output is off
 
+  while(1) {
+	  C
+  }
+
   // Read all inputs before
   /* USER CODE END 2 */
 
@@ -154,9 +168,9 @@ int main(void)
 			case OFF:
 				if(indicators->R_S != INSPECTION && indicators->TS == 1
 						&& indicators->ASMS_Status == 1) {
-					CAN_Send_Message_String("READY \n");
 					Initial_Checkup();
 					av_status = READY;
+					av_status_hex = 0x01;
 					timecheck = __HAL_TIM_GET_COUNTER(&htim7);
 				}
 				break;
@@ -165,43 +179,43 @@ int main(void)
 				if(FAILURE_MODE != NONE || RES == 1) {
 					CAN_Send_Message_String("EMGNCY\n");
 					CAN_Send_Message_String("TS OFF\n");
+					av_status_hex = 0x04;
 					av_status = EMERGENCY;
 				}
 				else if(indicators->ASMS_Status == 0 && indicators->TS == 0 && indicators->EBS == 0) {
 					CAN_Send_Message_String("OFF   \n");
+					av_status_hex = 0;
 					av_status = OFF;
 				}
 				else if((__HAL_TIM_GET_COUNTER(&htim7) - timecheck) > 500 && indicators->R_S != MANUAL && R2D == 1) {
 					if (indicators->R_S == TRACK) {
-						CAN_Send_Message_String("EBSTEST");
-					}
-					else if (indicators->R_S == EBS_TEST) {
-						CAN_Send_Message_String("INSPECT");
-					}
-					else if (indicators->R_S == INSPECTION) {
 						CAN_Send_Message_String("DRIVING");
 					}
+					else if (indicators->R_S == EBS_TEST) {
+						CAN_Send_Message_String("EBSTEST");
+					}
+					else if (indicators->R_S == INSPECTION) {
+						CAN_Send_Message_String("INSPECT");
+					}
+					av_status_hex = 0x02;
 					av_status = DRIVING;
 				}
 				break;
 
 			case DRIVING:
 				if(FAILURE_MODE != NONE || RES == 1) {
-					CAN_Send_Message_String("EMGNCY\n");
-					CAN_Send_Message_String("TS OFF\n");
-					CAN_Send_Message_String("DS OFF\n");
+					av_status_hex = 0x04;
 					av_status = EMERGENCY;
 				}
-				else if(indicators->R_S == TRACK) {
+				else if(indicators->R_S == EBS_TEST) {
 					if(EBS_Test_Accel_Stop == 1) {
+						av_status_hex = 0x04;
 						av_status = EMERGENCY;
 					}
 				}
 				else if(Mission_Finished == 1) {
 					EBSActivate(indicators);
-					CAN_Send_Message_String("FINISH\n");
-					CAN_Send_Message_String("TS OFF\n");
-					CAN_Send_Message_String("DS OFF\n");
+					av_status_hex = 0x03;
 					av_status = FINISHED;
 				}
 				break;
@@ -211,6 +225,7 @@ int main(void)
 					av_status = OFF;
 					RES = 0;
 					CAN_Send_Message_String("OFF   \n");
+					av_status_hex = 0;
 					FAILURE_MODE = NONE;
 				}
 				break;
@@ -218,10 +233,12 @@ int main(void)
 			case FINISHED:
 				if(RES == 1) {
 					CAN_Send_Message_String("EMGNCY\n");
+					av_status_hex = 0x04;
 					av_status = EMERGENCY;
 				}
 				else if(indicators->ASMS_Status == 0 && indicators->SB == 0) {
 					CAN_Send_Message_String("OFF   \n");
+					av_status_hex = 0;
 					av_status = OFF;
 				}
 				break;
@@ -299,6 +316,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
+/**
+  * @brief  This function is used to change all variable in the indicator struct to their current state.
+  * @param  indicators is a pointer to the struct containing all state information.
+  * @retval void
+  */
 void ReadInputs(AS__INDICATOR_STATES *indicators) {
 	Read_Rotary(&(indicators->R_S));
 	indicators->TS = HAL_GPIO_ReadPin(_3V3_TS_SWITCH_GPIO_Port, _3V3_TS_SWITCH_Pin);
@@ -359,14 +381,19 @@ void AV_State_Outputs(AS__INDICATOR_STATES *indicators, AV_STATE status, FAILURE
 	switch(status) {
 		case (READY):
 				ASSI_Ready();
+				CAN_Send_Message_SpecificID(0xFF00000000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (DRIVING):
 				ASSI_Driving();
+				CAN_Send_Message_SpecificID(0x00FF000000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (EMERGENCY):
 				SystemFailureHandler(FM);
+				CAN_Send_Message_SpecificID(0x0000FF0000000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (FINISHED):
 				ASSI_Finished();
+				CAN_Send_Message_SpecificID(0x000000FF00000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 		case (OFF):
 				ASSI_Off();
+				CAN_Send_Message_SpecificID(0x00000000FF000000, 0x415); // CHANGE THESE LINES: THEY TRANSMIT AV STATUS ON SPECIFIC M150 CHANNEL TO ENSURE OUTPUTS ON. CONFIRM WHICH CHANNEL RECEIVES AV STATUS MESSAGES ON M150
 	}
 }
 

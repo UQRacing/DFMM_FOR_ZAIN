@@ -23,7 +23,7 @@
 
 /* USER CODE BEGIN 0 */
 extern volatile uint8_t	 HeartbeatCheck[2];
-extern volatile uint8_t length; // Length of message being sent
+volatile uint8_t length; // Length of message being sent
 CAN_TxHeaderTypeDef   TxHeader;
 uint8_t               TxData[8];
 uint8_t               DataLogger[3];
@@ -44,14 +44,15 @@ const uint32_t	     PC_ID_FRAME1 = 0x590; // Data logger frame 1
 const uint32_t	     PC_ID_FRAME2 = 0x591; // Data logger frame 2
 const uint32_t	     PC_ID_FRAME3 = 0x592; // Data logger frame 3
 
-extern volatile uint8_t EBS_Energy_Check; // Cannister Pressure Check: 1 for ok, 0 for not
-extern volatile uint8_t EBS_Brake_Line; // Brake Line Pressure Check: 1 for ok, 0 for not
-extern volatile uint8_t Service_Brake_Check; // Redundant
-extern volatile uint8_t Steering_Actuator_Check; // Redundant
-extern volatile uint8_t Mission_Finished; // Flag for mission finish from PC: 1 if finished, 0 if not
-extern volatile uint8_t EBS_Sound; // Flag for EBS buzzer or Driving buzzer playing: 0 for not playing, 1 for EBS buzzer playing, 2 for Driving buzzer playing
-extern volatile uint8_t RES; // Flag for RES activated: 0 for not activated, 1 for activated
-extern volatile uint8_t R2D; // Flag for R2D switch on RES being switched: 0 if not, 1 for activated
+extern AV_STATE av_status;
+extern volatile uint8_t EBS_Energy_Check;
+extern volatile uint8_t EBS_Brake_Line;
+extern volatile uint8_t Service_Brake_Check;
+extern volatile uint8_t Steering_Actuator_Check;
+extern volatile uint8_t Mission_Finished;
+extern volatile uint8_t EBS_Sound;
+extern volatile uint8_t RES;
+extern volatile uint8_t R2D;
 extern volatile uint8_t StrainGauge; // Flag for strain gauge off M150 showing broken spring: 0 if not, 1 for broken
 extern volatile uint8_t EBS_Test_Accel_Stop; // Redundant
 /* USER CODE END 0 */
@@ -108,6 +109,7 @@ void MX_CAN2_Init(void)
   /* USER CODE BEGIN CAN2_Init 1 */
 
   /* USER CODE END CAN2_Init 1 */
+
   hcan2.Instance = CAN2;
   hcan2.Init.Prescaler = 4;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
@@ -120,6 +122,9 @@ void MX_CAN2_Init(void)
   hcan2.Init.AutoRetransmission = DISABLE;
   hcan2.Init.ReceiveFifoLocked = DISABLE;
   hcan2.Init.TransmitFifoPriority = DISABLE;
+  TxHeader.IDE = CAN_ID_STD;
+  TxHeader.StdId = DFMM_ID;
+  TxHeader.RTR = CAN_RTR_DATA;
   if (HAL_CAN_Init(&hcan2) != HAL_OK)
   {
     Error_Handler();
@@ -261,30 +266,104 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 
 /* USER CODE BEGIN 1 */
 
+/**
+  * @brief  This function is used to transmit an array of 8 bytes over the CAN bus.
+  * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
+  * @retval void
+  */
 void CAN_Send_Message(uint8_t* Transmission_Data)
 {
 	memset(TxData, 0, sizeof(TxData)); // Clear TxData array
 	length = (sizeof(Transmission_Data))/8; // Find length of message being sent
 	TxHeader.DLC = length; // Set TxHeader register to have this message length
+	TxHeader.StdId = DFMM_ID; // Set the standard ID of normal messages to be default DFMM ID
 	int i;
 	for(i=0; i<(length-1); i++) {
 		*(TxData + i) = *(Transmission_Data + i); // iterate over length of message to copy into TxData array
 	}
-
-	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
 	{
 	   Error_Handler();
 	}
 }
 
+/**
+  * @brief  This function is used to transmit an array of an 8 byte string over the CAN bus.
+  * @param  Transmission_Data is a string with maximum 8 bytes, which is transmitted over the CAN Bus.
+  * @retval void
+  */
 void CAN_Send_Message_String(char* Transmission_Data)
 {
 	memset(TxData, 0, sizeof(TxData)); // Clear TxData array
 	length = (sizeof(Transmission_Data))/8; // Find length of message being sent
 	TxHeader.DLC = length; // Set TxHeader register to have this message length
+	TxHeader.StdId = DFMM_ID; // Set the standard ID of normal messages to be default DFMM ID
 	int i;
 	for(i=0; i<(length-1); i++) {
 		*(TxData + i) = (unsigned int)((unsigned char)*(Transmission_Data + i)); // iterate over length of message to copy into TxData array
+	}
+	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	{
+	   Error_Handler();
+	}
+}
+
+/**
+  * @brief  This function is used to transmit an array of 8 bytes over the CAN bus with a custom ID.
+  * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
+  * 		ID is an unsigned 32 bit integer meant to be passed as a uninitialised hex code ie: 0x443, 0x221 etc.
+  * @retval void
+  */
+void CAN_Send_Message_SpecificID(uint8_t* Transmission_Data, uint32_t ID) {
+	memset(TxData, 0, sizeof(TxData)); // Clear TxData array
+	length = (sizeof(Transmission_Data))/8; // Find length of message being sent
+	TxHeader.DLC = length; // Set TxHeader register to have this message length
+	TxHeader.StdId = ID; // Set the standard ID of normal messages to be default DFMM ID
+	int i;
+	for(i=0; i<(length-1); i++) {
+		*(TxData + i) = *(Transmission_Data + i); // iterate over length of message to copy into TxData array
+	}
+	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	{
+	   Error_Handler();
+	}
+}
+
+/**
+  * @brief  This function is used to transmit an array of an 8 byte string over the CAN bus with a custom ID.
+  * @param  Transmission_Data is a string with maximum 8 bytes, which is transmitted over the CAN Bus.
+  * 		ID is an unsigned 32 bit integer meant to be passed as a uninitialised hex code ie: 0x443, 0x221 etc.
+  * @retval void
+  */
+void CAN_Send_Message_String_SpecificID(char* Transmission_Data, uint32_t ID) {
+	memset(TxData, 0, sizeof(TxData)); // Clear TxData array
+	length = (sizeof(Transmission_Data))/8; // Find length of message being sent
+	TxHeader.DLC = length; // Set TxHeader register to have this message length
+	TxHeader.StdId = ID; // Set the standard ID of normal messages to be default DFMM ID
+	int i;
+	for(i=0; i<(length-1); i++) {
+		*(TxData + i) = (unsigned int)((unsigned char)*(Transmission_Data + i)); // iterate over length of message to copy into TxData array
+	}
+	if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+	{
+	   Error_Handler();
+	}
+}
+
+/**
+  * @brief  This function is used to transmit to the DataLogger once PC sends all three CAN Frames
+  * @param  void
+  * @retval void
+  */
+void CAN_Send_Datalogger(void)
+{
+	memset(TxData, 0, sizeof(TxData)); // Clear TxData array
+	length = (sizeof(DataLogger))/8; // Find length of message being sent
+	TxHeader.DLC = length; // Set TxHeader register to have this message length
+	TxHeader.StdId = DFMM_ID; // CHANGE this line to the ID that the data logger wants
+	int i;
+	for(i=0; i<(length-1); i++) {
+		*(TxData + i) = *(DataLogger + i); // iterate over length of message to copy into TxData array
 	}
 
 	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)

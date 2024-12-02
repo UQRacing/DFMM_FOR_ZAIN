@@ -64,6 +64,30 @@ void CAN_Send_Message_String(char* Transmission_Data);
   * @param  Transmission_Data is a string with maximum 8 bytes, which is transmitted over the CAN Bus.
   * @retval void
   */
+
+void CAN_Send_Message_SpecificID(uint8_t* Transmission_Data, uint32_t ID);
+/**
+  * @brief  This function is used to transmit an array of 8 bytes over the CAN bus with a custom ID.
+  * @param  Transmission_Data is an array of 8 bytes, with each byte being one 2 digit hex code.
+  * 		ID is an unsigned 32 bit integer meant to be passed as a uninitialised hex code ie: 0x443, 0x221 etc.
+  * @retval void
+  */
+
+void CAN_Send_Message_String_SpecificID(char* Transmission_Data, uint32_t ID);
+/**
+  * @brief  This function is used to transmit an array of an 8 byte string over the CAN bus with a custom ID.
+  * @param  Transmission_Data is a string with maximum 8 bytes, which is transmitted over the CAN Bus.
+  * 		ID is an unsigned 32 bit integer meant to be passed as a uninitialised hex code ie: 0x443, 0x221 etc.
+  * @retval void
+  */
+
+void CAN_Send_Datalogger(void);
+/**
+  * @brief  This function is used to transmit to the DataLogger once PC sends all three CAN Frames
+  * @param  void
+  * @retval void
+  */
+
 void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
 
 void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
