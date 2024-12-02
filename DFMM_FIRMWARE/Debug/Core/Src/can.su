@@ -9,4 +9,4 @@
 ../Core/Src/can.c:355:6:CAN_Send_Datalogger	16	static
 ../Core/Src/can.c:373:6:CAN_Set_Filter	16	static
 ../Core/Src/can.c:387:6:ReceiveMessage	16	static
-../Core/Src/can.c:472:6:HAL_CAN_RxFifo0MsgPendingCallback	16	static
+../Core/Src/can.c:473:6:HAL_CAN_RxFifo0MsgPendingCallback	16	static

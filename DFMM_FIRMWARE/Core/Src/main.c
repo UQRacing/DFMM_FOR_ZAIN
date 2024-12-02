@@ -333,6 +333,7 @@ void ReadInputs(AS__INDICATOR_STATES *indicators) {
 	indicators->SB = Service_Brake_Check; // Redundant
 	indicators->SA = Steering_Actuator_Check; // Redundant
 	indicators->ASMS_Status = HAL_GPIO_ReadPin(ASMS_SIG_GPIO_Port, ASMS_SIG_Pin);
+	indicators->SDC = HAL_GPIO_ReadPin(SDC_CHECK_GPIO_Port, SDC_CHECK_Pin);
 	EBSCheck(indicators);
 }
 

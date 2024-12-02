@@ -65,6 +65,7 @@ typedef struct {
 	int SB; // Service Brake
 	EBS_STATE EBS; // Emergency Braking System
 	uint8_t ASMS_Status; // Stores the state of the ASMS
+	uint8_t SDC; // Stores the state of the SDC
 } AS__INDICATOR_STATES; // Struct for all current AV state attributes.
 typedef enum SYSTEM_FAILURE {
 	  SDC_FAILURE,
@@ -154,6 +155,8 @@ void ReadInputs(AS__INDICATOR_STATES *indicators);
 /* Private defines -----------------------------------------------------------*/
 #define ASSI_BLUE_Pin GPIO_PIN_1
 #define ASSI_BLUE_GPIO_Port GPIOC
+#define ASSI_YELW_Pin GPIO_PIN_2
+#define ASSI_YELW_GPIO_Port GPIOC
 #define ANL1_Pin GPIO_PIN_1
 #define ANL1_GPIO_Port GPIOA
 #define ANL2_Pin GPIO_PIN_2

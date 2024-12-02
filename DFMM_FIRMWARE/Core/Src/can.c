@@ -394,6 +394,7 @@ void ReceiveMessage(CAN_RxHeaderTypeDef *ReceptionHeader, uint8_t *Receive_Data)
 	 * messages AND the byte offset must be changed depending on the length of the message and where the byte
 	 * is located (7th to 4th, etc).
 	 */
+	HAL_GPIO_TogglePin(ASSI_YELW_GPIO_Port, ASSI_YELW_Pin);
 	if (ReceptionHeader->StdId == PC_ID_FRAME1) {
 		DataLogger[0] = *(Receive_Data); // First data logger byte stored in array DataLogger
 	}
